@@ -80,7 +80,11 @@ class IO{
 
   void getByte(byte[] array, int begin, int length) throws IOException {
     do{
+//      System.out.println("[afecioru > IO#getByte] Before read");
+      long beforeTs = System.currentTimeMillis();
       int completed = in.read(array, begin, length);
+      long elapsedMs = System.currentTimeMillis() - beforeTs;
+//      System.out.println("[afecioru > IO#getByte] Read took " + elapsedMs + " ms");
       if(completed<0){
         throw new IOException("End of IO Stream Read");
       }

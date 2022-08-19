@@ -311,6 +311,7 @@ public abstract class Channel{
         }
         @Override
         public void close() throws IOException{
+          System.out.println("[afecioru > Channel#close] >>>>>>>>>>>> Closing channel <<<<<<<<<<<<<<<<");
           if(packet==null){
             try{
               init();
@@ -427,11 +428,19 @@ public abstract class Channel{
   void setLocalWindowSizeMax(int foo){ this.lwsize_max=foo; }
   void setLocalWindowSize(int foo){ this.lwsize=foo; }
   void setLocalPacketSize(int foo){ this.lmpsize=foo; }
-  synchronized void setRemoteWindowSize(long foo){ this.rwsize=foo; }
-  synchronized void addRemoteWindowSize(long foo){ 
-    this.rwsize+=foo; 
-    if(notifyme>0)
+  synchronized void setRemoteWindowSize(long foo){
+    System.out.println("[afecioru > Channel#setRWS] RWS: " + foo);
+    this.rwsize=foo;
+  }
+  synchronized void addRemoteWindowSize(long foo){
+    System.out.println("[afecioru > Channel#addRWS] RWS: " + foo);
+    this.rwsize+=foo;
+    if(notifyme>0) {
+      System.out.println("[afecioru > Channel#addRWS] Notifying all parties.");
       notifyAll();
+    } else {
+      System.out.println("[afecioru > Channel#addRWS] No notification necessary.");
+    }
   }
   void setRemotePacketSize(int foo){ this.rmpsize=foo; }
 

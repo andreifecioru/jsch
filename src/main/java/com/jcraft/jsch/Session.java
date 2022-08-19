@@ -34,6 +34,7 @@ import java.io.InputStream;
 import java.io.InterruptedIOException;
 import java.io.OutputStream;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
@@ -1077,6 +1078,8 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
   private int s2ccipher_size=8;
   private int c2scipher_size=8;
   public Buffer read(Buffer buf) throws Exception{
+//    System.out.println("[afecioru > Session#read] Entry");
+
     int j=0;
     boolean isChaCha20=(s2ccipher!=null && s2ccipher.isChaCha20());
     boolean isAEAD=(s2ccipher!=null && s2ccipher.isAEAD());
@@ -1181,7 +1184,9 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
         }
       }
       else{
+//        System.out.println("[afecioru > Session#read] Checkpoint 1");
         io.getByte(buf.buffer, buf.index, s2ccipher_size);
+//        System.out.println("[afecioru > Session#read] Checkpoint 2");
         buf.index+=s2ccipher_size;
         if(s2ccipher!=null){
           s2ccipher.update(buf.buffer, 0, s2ccipher_size, buf.buffer, 0);
@@ -1253,7 +1258,7 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
       }
 
       int type=buf.getCommand()&0xff;
-      //System.err.println("read: "+type);
+      System.out.println("[afecioru > Session#read] Command type: " + type);
       if(type==SSH_MSG_DISCONNECT){
         buf.rewind();
         buf.getInt();buf.getShort();
@@ -1266,8 +1271,7 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
                                 " "+Util.byte2str(language_tag));
         //break;
       }
-      else if(type==SSH_MSG_IGNORE){
-      }
+      else if(type==SSH_MSG_IGNORE){}
       else if(type==SSH_MSG_UNIMPLEMENTED){
         buf.rewind();
         buf.getInt();buf.getShort();
@@ -1296,7 +1300,9 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
           if(c==null){
           }
           else{
-            c.addRemoteWindowSize(buf.getUInt());
+            long winSize = buf.getUInt();
+            System.out.println("[afecioru > Session#read] Window adjustment: " + winSize);
+            c.addRemoteWindowSize(winSize);
           }
       }
       else if(type==SSH_MSG_EXT_INFO){
@@ -1367,6 +1373,7 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
       }
     }
     buf.rewind();
+//    System.out.println("[afecioru > Session#read] Exit");
     return buf;
   }
 
@@ -1577,7 +1584,12 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
     return result;
   }
 
+  private boolean isChannelClosed(Channel c) {
+    return (c.close || !c.isConnected());
+  }
+
   /*public*/ /*synchronized*/ void write(Packet packet, Channel c, int length) throws Exception{
+//    System.out.println("[afecioru > Session#write(2)] Writing packet. (rwsize: " + c.rwsize + ", length: "+ length + ")");
     long t = getTimeout();
     while(true){
       if(in_kex){
@@ -1593,10 +1605,10 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
         if(c.rwsize<length){
           try{
             c.notifyme++;
+            System.out.println("[afecioru > Session#write(2)] Waiting. (rwsize: " + c.rwsize + ")");
             c.wait(100);
           }
-          catch(InterruptedException e){
-          }
+          catch(InterruptedException e){}
           finally{
             c.notifyme--;
           }
@@ -1635,10 +1647,13 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
           recipient=c.getRecipient();
           length-=len;
           c.rwsize-=len;
+
+          System.out.println("[afecioru > Session#write(2)] Send it! (rwsize: " + c.rwsize + ")");
           sendit=true;
         }
       }
       if(sendit){
+        System.out.println("[afecioru > Session#write(2)] Sending packet. (rwsize: " + c.rwsize + ")");
         _write(packet);
         if(length==0){
           return;
@@ -1671,7 +1686,8 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
   }
 
   public void write(Packet packet) throws Exception{
-    // System.err.println("in_kex="+in_kex+" "+(packet.buffer.getCommand()));
+    System.out.println("[afecioru > Session#write(1)] Writing packet..." +
+                       "in_kex="+in_kex+" "+(packet.buffer.getCommand()));
     long t = getTimeout();
     while(in_kex){
       if(t>0L &&
@@ -1681,7 +1697,7 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
         throw new JSchException("timeout in waiting for rekeying process.");
       }
       byte command=packet.buffer.getCommand();
-      //System.err.println("command: "+command);
+      System.out.println("[afecioru > Session#write(1)] command: "+command);
       if(command==SSH_MSG_KEXINIT ||
          command==SSH_MSG_NEWKEYS ||
          command==SSH_MSG_KEXDH_INIT ||
@@ -1726,8 +1742,12 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
     try{
       while(isConnected &&
             thread!=null){
+//        System.out.println("[afecioru > Session#run] Main thread...");
+
         try{
+//          System.out.println("[afecioru > Session#run] Before read");
           buf=read(buf);
+//          System.out.println("[afecioru > Session#run] After read");
           stimeout=0;
         }
         catch(InterruptedIOException/*SocketTimeoutException*/ ee){
@@ -1742,6 +1762,7 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
           }
           throw ee;
         }
+
 
         int msgType=buf.getCommand()&0xff;
 
@@ -1774,32 +1795,49 @@ key_type+" key fingerprint is "+key_fprint+".\n"+
           i=buf.getInt();
           channel=Channel.getChannel(i, this);
           foo=buf.getString(start, length);
+          String payload = new String(foo,start[0],length[0]);
+//          System.out.println("[afecioru > Session#read] Channel message: " + payload);
+
           if(channel==null){
+            System.out.println("[afecioru > Session#run] Channel message: early exit 1");
             break;
           }
 
           if(length[0]==0){
+            System.out.println("[afecioru > Session#run] Channel message: early exit 2");
             break;
           }
 
-try{
-          channel.write(foo, start[0], length[0]);
-}
-catch(Exception e){
-//System.err.println(e);
-  try{channel.disconnect();}catch(Exception ee){}
-break;
-}
+          try{
+            channel.write(foo, start[0], length[0]);
+          }
+          catch(Exception e){
+            System.out.println("[afecioru > Session#run] Channel message: early exit 3 - " + e.getMessage());
+          //System.err.println(e);
+            try{channel.disconnect();}catch(Exception ee){}
+            break;
+          }
+
           int len=length[0];
           channel.setLocalWindowSize(channel.lwsize-len);
-           if(channel.lwsize<channel.lwsize_max/2){
+//          if (!payload.contains("Socket is closed")) {
+//            payload = "";
+//          }
+          System.out.println("[afecioru > Session#run] Channel message - " + System.currentTimeMillis() + " (phase 0 : " + channel.lwsize + "/" + channel.lwsize_max + " | " + isChannelClosed(channel) + ") > " + payload);
+          if(channel.lwsize<channel.lwsize_max/2){
+            int newRWS = channel.lwsize_max-channel.lwsize;
+
+            System.out.println("[afecioru > Session#run] Channel message - attempting RWS adjust (phase 1) - new RWS: " + newRWS);
             packet.reset();
             buf.putByte((byte)SSH_MSG_CHANNEL_WINDOW_ADJUST);
             buf.putInt(channel.getRecipient());
-            buf.putInt(channel.lwsize_max-channel.lwsize);
+            buf.putInt(newRWS);
             synchronized(channel){
-              if(!channel.close)
+              System.out.println("[afecioru > Session#run] Channel message - attempting RWS adjust (phase 2)");
+              if(!channel.close) {
+                System.out.println("[afecioru > Session#run] Channel message - attempting RWS adjust (phase 3)");
                 write(packet);
+              }
             }
             channel.setLocalWindowSize(channel.lwsize_max);
           }
@@ -1846,7 +1884,9 @@ break;
           if(channel==null){
             break;
           }
-          channel.addRemoteWindowSize(buf.getUInt());
+          long winSize = buf.getUInt();
+          System.out.println("[afecioru > Session#run] Window adjustment: " + winSize);
+          channel.addRemoteWindowSize(winSize);
           break;
 
         case SSH_MSG_CHANNEL_EOF:
@@ -1867,6 +1907,7 @@ break;
           */
           break;
         case SSH_MSG_CHANNEL_CLOSE:
+          System.out.println("[afecioru > Session#run] Closing channel...");
           buf.getInt();
           buf.getShort();
           i=buf.getInt();
@@ -1991,6 +2032,8 @@ break;
           buf.getInt();
           buf.getShort();
           foo=buf.getString();       // request name
+          String payload1 = new String(foo);
+          System.out.println("s[afecioru > Session#run] Global request: " + payload1);
           reply=(buf.getByte()!=0);
           if(reply){
             packet.reset();

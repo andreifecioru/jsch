@@ -29,6 +29,8 @@ EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 package com.jcraft.jsch;
 
+import java.util.Optional;
+
 public abstract class KeyExchange{
 
   static final int PROPOSAL_KEX_ALGS=0;
@@ -42,6 +44,19 @@ public abstract class KeyExchange{
   static final int PROPOSAL_LANG_CTOS=8;
   static final int PROPOSAL_LANG_STOC=9;
   static final int PROPOSAL_MAX=10;
+
+  static final String[] paramNames = {
+    "ALGOS",
+    "HOST-KEY ALGOS",
+    "CIPHERS CLIENT TO SERVER",
+    "CIPHERS SERVER TO CLIENT",
+    "HMAC CLIENT TO SERVER",
+    "HMAC SERVER TO CLIENT",
+    "COMPRESSION CLIENT TO SERVER",
+    "COMPRESSION SERVER TO CLIENT",
+    "LANG CLIENT TO SERVER",
+    "LANG SERVER TO CLIENT"
+  };
 
   //static String kex_algs="diffie-hellman-group-exchange-sha1"+
   //                       ",diffie-hellman-group1-sha1";
@@ -97,24 +112,26 @@ public abstract class KeyExchange{
   }
 
   protected static String[] guess(Session session, byte[]I_S, byte[]I_C) throws Exception{
+    System.out.println("-----------[ START GUESSING ]------------");
+
     String[] guess=new String[PROPOSAL_MAX];
     Buffer sb=new Buffer(I_S); sb.setOffSet(17);
     Buffer cb=new Buffer(I_C); cb.setOffSet(17);
 
-    if(session.getLogger().isEnabled(Logger.INFO)){
+//    if(session.getLogger().isEnabled(Logger.INFO)){
+    if(true){
+      System.out.println("\nProposals");
       for(int i=0; i<PROPOSAL_MAX; i++){
-        session.getLogger().log(Logger.INFO,
-                             "kex: server: "+Util.byte2str(sb.getString()));
-      }
-      for(int i=0; i<PROPOSAL_MAX; i++){
-        session.getLogger().log(Logger.INFO,
-                             "kex: client: "+Util.byte2str(cb.getString()));
+        System.out.println("  Proposals for: " + paramNames[i]);
+        System.out.println("    > server: "+Util.byte2str(sb.getString()));
+        System.out.println("    > client: "+Util.byte2str(cb.getString()));
       }
       sb.setOffSet(17);
       cb.setOffSet(17);
     }
 
     for(int i=0; i<PROPOSAL_MAX; i++){
+      System.out.println("\nNegotiating: " + paramNames[i]);
       byte[] sp=sb.getString();  // server proposal
       byte[] cp=cb.getString();  // client proposal
       int j=0;
@@ -125,12 +142,16 @@ public abstract class KeyExchange{
         while(j<cp.length && cp[j]!=',')j++; 
         if(k==j) return null;
         String algorithm=Util.byte2str(cp, k, j-k);
+        System.out.println("  > Considering client proposal: " + algorithm);
         int l=0;
         int m=0;
         while(l<sp.length){
           while(l<sp.length && sp[l]!=',')l++; 
           if(m==l) return null;
-          if(algorithm.equals(Util.byte2str(sp, m, l-m))){
+          String algoServerProposal = Util.byte2str(sp, m, l-m);
+          System.out.println("    - matching against server proposal: " + algoServerProposal);
+          if(algorithm.equals(algoServerProposal)){
+            System.out.println("    + match found: " + algoServerProposal);
             guess[i]=algorithm;
             break loop;
           }
@@ -144,6 +165,7 @@ public abstract class KeyExchange{
         guess[i]="";
       }
       else if(guess[i]==null){
+        session.getLogger().log(Logger.INFO, "-----------[ STOP GUESSING (1) ]------------");
         return null;
       }
     }
@@ -166,25 +188,26 @@ public abstract class KeyExchange{
       }
     }
     catch(Exception | NoClassDefFoundError e){
+      System.out.println("-----------[ STOP GUESSING (2) ]------------");
       throw new JSchException(e.toString(), e);
     }
 
-    if(session.getLogger().isEnabled(Logger.INFO)){
-      session.getLogger().log(Logger.INFO, 
-                           "kex: algorithm: "+guess[PROPOSAL_KEX_ALGS]);
-      session.getLogger().log(Logger.INFO, 
-                           "kex: host key algorithm: "+guess[PROPOSAL_SERVER_HOST_KEY_ALGS]);
-      session.getLogger().log(Logger.INFO, 
-                           "kex: server->client"+
-                           " cipher: "+guess[PROPOSAL_ENC_ALGS_STOC]+
-                           " MAC: "+(_s2cAEAD?("<implicit>"):(guess[PROPOSAL_MAC_ALGS_STOC]))+
-                           " compression: "+guess[PROPOSAL_COMP_ALGS_STOC]);
-      session.getLogger().log(Logger.INFO, 
-                           "kex: client->server"+
-                           " cipher: "+guess[PROPOSAL_ENC_ALGS_CTOS]+
-                           " MAC: "+(_c2sAEAD?("<implicit>"):(guess[PROPOSAL_MAC_ALGS_CTOS]))+
-                           " compression: "+guess[PROPOSAL_COMP_ALGS_CTOS]);
+//    if(session.getLogger().isEnabled(Logger.INFO)){
+    if(true){
+      System.out.println("\n------------\n\nNegotiation result:");
+      System.out.println("  > algorithm: "+guess[PROPOSAL_KEX_ALGS]);
+      System.out.println("  > host key algorithm: "+guess[PROPOSAL_SERVER_HOST_KEY_ALGS]);
+      System.out.println("  > server->client"+
+                         "\n      - cipher: "+guess[PROPOSAL_ENC_ALGS_STOC]+
+                         "\n      - MAC: "+(_s2cAEAD?("<implicit>"):(guess[PROPOSAL_MAC_ALGS_STOC]))+
+                         "\n      - compression: "+guess[PROPOSAL_COMP_ALGS_STOC]);
+      System.out.println("  > client->server"+
+                         "\n      - cipher: "+guess[PROPOSAL_ENC_ALGS_CTOS]+
+                         "\n      - MAC: "+(_c2sAEAD?("<implicit>"):(guess[PROPOSAL_MAC_ALGS_CTOS]))+
+                         "\n      - compression: "+guess[PROPOSAL_COMP_ALGS_CTOS]);
     }
+
+    System.out.println("-----------[ STOP GUESSING (3) ]------------");
 
     return guess;
   }

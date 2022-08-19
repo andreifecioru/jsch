@@ -31,7 +31,7 @@ package com.jcraft.jsch;
 
 import java.math.BigInteger;
 
-class KeyPairRSA extends KeyPair{
+public class KeyPairRSA extends KeyPair{
   private byte[] n_array;   // modulus   p multiply q
   private byte[] pub_array; // e
   private byte[] prv_array; // d         e^-1 mod (p-1)(q-1)
